@@ -24,7 +24,6 @@ public class UserDatabase {
     private ResultSet rs;
     private Statement st;
     
-    
     public Connection connect() {
         try {
             Class.forName("com.mysql.jdbc.Driver");   

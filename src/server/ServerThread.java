@@ -239,10 +239,6 @@ public class ServerThread extends Thread {
                         case "GET_USER_ONLINE":
                             notifyToAllUsers("GET_USER_ONLINE|" + getAllUsers());
                             break;
-
-                      
-
-                       
                         default:
                             notifyToAllUsers("GET_USER_ONLINE|" + getAllUsers());
 
