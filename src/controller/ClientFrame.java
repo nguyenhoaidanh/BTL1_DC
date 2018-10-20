@@ -1,11 +1,13 @@
 package controller;
 
+import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -34,13 +36,13 @@ import view.WelcomePanel;
 public class ClientFrame extends JFrame implements Runnable {
 
     String serverHost;
-    public static final String NICKNAME_EXIST = "This nickname is already login in another place! Please using another nickname";
+    public static final String NICKNAME_EXIST = "This nickname is already login in another place!";
     public static final String NICKNAME_VALID = "This nickname is OK";
     public static final String NICKNAME_INVALID = "Nickname or password is incorrect";
     public static final String SIGNUP_SUCCESS = "Sign up successful!";
-    public static final String ACCOUNT_EXIST = "This nickname has been used! Please use another nickname!";
+    public static final String ACCOUNT_EXIST = "This nickname has been used!";
 
-    String name;
+    String name; // name of owner
     Socket socketOfClient;
     BufferedWriter bw;
     BufferedReader br;
@@ -53,8 +55,6 @@ public class ClientFrame extends JFrame implements Runnable {
     boolean isRunning;
 
     JMenuBar menuBar;
-    JMenu menuShareFile;
-    JMenuItem itemSendFile;
     JMenu menuAccount;
     JMenuItem itemLogout;
 
@@ -68,7 +68,7 @@ public class ClientFrame extends JFrame implements Runnable {
 
     int timeClicked = 0;    ///biến này để kiểm tra xem người dùng vừa click hay vừa double-click vào jList.
 
-    Hashtable<String, Chat> listReceiver;
+    
 
     public ClientFrame(String name) {
         this.name = name;
@@ -79,14 +79,13 @@ public class ClientFrame extends JFrame implements Runnable {
 
         listModel_rp = new DefaultListModel<>();
         isConnectToServer = false;
-        listReceiver = new Hashtable<>();
 
         mainPanel = new JPanel();
         loginPanel = new LoginPanel();
 
         welcomePanel = new WelcomePanel();
         signUpPanel = new SignUpPanel();
-        userOnline = new UserOnline();
+        userOnline = new UserOnline(this.name);
 
         welcomePanel.setVisible(true);
         signUpPanel.setVisible(false);
@@ -137,7 +136,7 @@ public class ClientFrame extends JFrame implements Runnable {
         pack();
 
         add(mainPanel);
-        setSize(550, 350);
+        setSize(610, 370);
         setLocation(400, 100);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setTitle(name);
@@ -236,6 +235,27 @@ public class ClientFrame extends JFrame implements Runnable {
                 }
             }
         });
+        userOnline.getBtSend().addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent ae) {
+                btSendEvent();
+            }
+        });
+    }
+
+    private void btSendEvent() {
+        String message = userOnline.getTaInput().getText().trim();
+        if (message.equals("")) {
+            userOnline.getTaInput().setText("");
+        } else {
+            this.sendToServer("CHAT_ROOM_MSG|" + message);       //gửi data tới server
+            this.btClearEvent();
+        }
+
+    }
+
+    private void btClearEvent() {
+        userOnline.getTaInput().setText("");
     }
 
     private void openPrivateChat() throws IOException {
@@ -247,22 +267,18 @@ public class ClientFrame extends JFrame implements Runnable {
 
         if (timeClicked == 2) {  //nếu như countingTo500ms chưa thực hiện xong, tức là timeClicked vẫn = 2:
             String privateReceiver = userOnline.getOnlineList_rp().getSelectedValue();
-            String Receiver=privateReceiver.split("-")[0];
-            String IP=socketOfClient.getInetAddress().toString().split("/")[1];
-           int desPort=Integer.parseInt(privateReceiver.split("-")[1]);
-           int srcPort=socketOfClient.getLocalPort();
-           
-             Chat pc = new Chat(this.name, Receiver, srcPort, desPort, IP);
-          
-            if (pc == null) {    //nếu đây là lần đầu tiên nhắn tin với người mà ta vừa double-click vào
-               
-              pc = new Chat(this.name, Receiver, srcPort, desPort, IP);
-               
-                pc.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-               
-            } else {
-                pc.setVisible(true);
-            }
+            String Receiver = privateReceiver.split("-")[0];
+            String IP = socketOfClient.getInetAddress().toString().split("/")[1];
+            int desPort = Integer.parseInt(privateReceiver.split("-")[1]);
+            int srcPort = socketOfClient.getLocalPort();
+
+            Chat pc = new Chat(this.name, Receiver, srcPort, desPort, IP);
+            pc.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            pc.addWindowListener(new java.awt.event.WindowAdapter() {
+                public void windowClosing(WindowEvent winEvt) {
+                    pc.exit();
+                }
+            });
         }
     }
 
@@ -418,7 +434,6 @@ public class ClientFrame extends JFrame implements Runnable {
     }
 
     public static void main(String[] args) {
-
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException ex) {
@@ -431,7 +446,7 @@ public class ClientFrame extends JFrame implements Runnable {
     @Override
     public void run() {
         String response;
-        String sender, receiver, fileName, thePersonIamChattingWith, thePersonSendFile;
+        String sender ;
         String msg;
         String cmd;
         Chat pc;
@@ -441,26 +456,18 @@ public class ClientFrame extends JFrame implements Runnable {
             tokenizer = new StringTokenizer(response, "|");
             cmd = tokenizer.nextToken();
             switch (cmd) {
-                case "CHAT_MSG":     //khi server gửi message của sender, đứng ở góc nhìn của thằng client này
-                    //thì thằng gửi tới đó chính là thằng nhận, vì thằng client này chat với thằng gửi đó,
-                    //nên thằng gửi đó sẽ nhận tin từ thằng này
+                case "CHAT_ROOM_MSG":    //giả sử nhận được gói tin: CHAT_ROOM_MSG|danh: today is very cool!
                     sender = tokenizer.nextToken();
-                    msg = response.substring(cmd.length() + sender.length() + 2, response.length());
-
-                    pc = listReceiver.get(sender);
-
-                    if (pc == null) {
-                        try {
-                            pc = new Chat("", "", 1, 1, "x");
-                        } catch (IOException ex) {
-                            Logger.getLogger(ClientFrame.class.getName()).log(Level.SEVERE, null, ex);
-                        }
-
-                        listReceiver.put(sender, pc);
+                    msg = response.substring(cmd.length() + sender.length() + 7, response.length());
+                    System.out.println("sender " + sender);
+                    System.out.println("msg " + msg);
+                    if (sender.equals(this.name)) {
+                        this.userOnline.appendMessage("Bạn" + ": ", msg, Color.BLACK, new Color(0, 102, 204));
                     } else {
-                        pc.setVisible(true);
+                        this.userOnline.appendMessage(sender + ": ", msg, Color.MAGENTA, new Color(56, 224, 0));
                     }
-                    pc.appendMessage_Left(sender + ": ", msg);
+
+                    //phải lằng nhằng như trên vì tránh trường hợp tin nhắn có ký tự |, nếu cứ dùng StringTokenizer và lấy ký tự '|' làm cái phân chia thì tin nhắn ko thể hiển thị kí tự | đc
                     break;
 
                 case "GET_USER_ONLINE":
@@ -469,38 +476,14 @@ public class ClientFrame extends JFrame implements Runnable {
                     while (tokenizer.hasMoreTokens()) {
                         cmd = tokenizer.nextToken();
 
-                        listModel_rp.addElement(cmd);
+                        String owner = this.name + "-" + this.socketOfClient.getLocalPort();
+                        if (!owner.equals(cmd)) {
+                            listModel_rp.addElement(cmd);
+                        }
                     }
-
-                    listModel_rp.removeElement(this.name);
+                    if(listModel_rp.size()==0)userOnline.getTaInput().setEditable(false);
+                    else userOnline.getTaInput().setEditable(true);
                     userOnline.getOnlineList_rp().setModel(listModel_rp);
-                    break;
-
-                case "MSG_FILE_AVAILABLE":
-                    System.out.println("file available");
-                    fileName = tokenizer.nextToken();
-                    thePersonIamChattingWith = tokenizer.nextToken();
-                    thePersonSendFile = tokenizer.nextToken();
-
-                    pc = listReceiver.get(thePersonIamChattingWith);
-
-                    if (pc == null) {
-                        sender = this.name;
-                        receiver = thePersonIamChattingWith;
-                try {
-                    pc = new Chat("","",1,1,"x");
-                } catch (IOException ex) {
-                    Logger.getLogger(ClientFrame.class.getName()).log(Level.SEVERE, null, ex);
-                }
-
-                     
-                        pc.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-
-                        listReceiver.put(receiver, pc);
-                    }
-
-                    pc.setVisible(true);    //nếu cái pc đó đang Visible rồi thì lệnh này cho focus vào cái frame này
-                    pc.insertButton(thePersonSendFile, fileName);
                     break;
                 default:
 

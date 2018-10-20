@@ -11,14 +11,12 @@ import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -28,8 +26,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
-import java.net.Socket;
-import java.net.UnknownHostException;
 import javax.swing.JButton;
 import static javax.swing.WindowConstants.DISPOSE_ON_CLOSE;
 import javax.swing.text.BadLocationException;
@@ -38,26 +34,32 @@ import javax.swing.text.html.HTMLEditorKit;
 
 public class Chat extends javax.swing.JFrame implements Runnable {
 
-    int PIECES_OF_FILE_SIZE = 1024 * 32;
-    String name;
-    int sourcePort;
-    String destinationIP = "10.80.255.176";
+    int PIECES_OF_FILE_SIZE = 1024 * 32; // maximum data can send one time use in a packet is 65508 => so use 1024*32 
+    String name;   // name of owner chat
+    int sourcePort; 
+    DatagramSocket socket; //socket of owner 
+     
+    String destinationIP ;    
     int destinationPort;
-    int portServer = 1000;
-    String serverhost = "localhost";
-    public BufferedWriter bw;
-     FileInfo fileInfo ; // file info that will be download
-    public BufferedReader br;
-    InetSocketAddress address;
-    DatagramSocket socket;
-    boolean running;
-    public String dataReceive;
-    String msg;   //tin nhan gui di
     String receiver; // nguoi nhan
+    
+    public BufferedWriter bw;
+     public BufferedReader br;
+    
+    FileInfo fileInfo; // file info that will be download
+   
+    InetSocketAddress address;
+    
+    boolean running;
+    
+    public String dataReceive;
+    
+    String msg;   //tin nhan gui di
     String filename; // file  gui di
+    SendFileFrame sendFileFrame;
     HTMLEditorKit htmlKit;
     HTMLDocument htmlDoc;
-    SendFileFrame sendFileFrame;
+    
 
     public Chat(String name, String receiver, int srcPort, int desPort, String desIP) throws SocketException, IOException {
         this.name = name;
@@ -67,41 +69,48 @@ public class Chat extends javax.swing.JFrame implements Runnable {
         this.receiver = receiver;
         msg = "";
         initComponents();
-        this.setVisible(true);
         this.setTitle(this.name + " chat with " + this.receiver);
         start();
+       
         this.address = new InetSocketAddress(desIP, desPort);
         htmlKit = new HTMLEditorKit();
         htmlDoc = new HTMLDocument();
         messContent.setEditorKit(htmlKit);
         messContent.setDocument(htmlDoc);
+        messContent.setEditable(false);
 
     }
 
     public void start() throws SocketException, IOException {
-        bind(sourcePort);
-        System.out.println("Peer of " + name + " Started.");
-        Thread thread = new Thread(this);
-        thread.start();
-    }
+        this.setVisible(false);
+        if (bind(sourcePort)) {
+            System.out.println("Peer of " + name + " Started.");
+            Thread thread = new Thread(this);
+            thread.start();
+            this.setVisible(true);
+        } else {
+            this.setVisible(false);
+        }
 
+    }
+    
     public void sendMess() throws IOException {
         String Mess = this.msg;
         if (Mess != "") {
             appendMessage_Right(this.msg);
-            Mess = "CHAT_MSG|" + Mess;
+            Mess = "CHAT_MSG|" + Mess;     
             sendTo(this.address, Mess);
         }
     }
 
-    public void insertButton(String sender, String fileName) {
+    public void insertButton(String sender, String fileName) { // insert button download
         JButton bt = new JButton(fileName);
         bt.setName(fileName);
         bt.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent ae) {
                 try {
-                    downloadFile(fileName,fileInfo);
+                    downloadFile(fileName, fileInfo);
                 } catch (IOException ex) {
                     Logger.getLogger(Chat.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -123,9 +132,9 @@ public class Chat extends javax.swing.JFrame implements Runnable {
 
     public void appendMessage_Left(String msg1, String msg2) {      //dành cho người mà user này đang chat cùng
         try {
-            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:black; padding: 3px; margin-top: 4px; margin-right:35px; text-align:left; font:normal 12px Tahoma;\"><span style=\"background-color:#f3f3f3;\"><b>" + msg1 + "</b><span style=\"color:black;\">" + msg2 + "</span></span></p>", 0, 0, null);
+            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:black; padding: 3px; margin-top: 4px; margin-right:35px; text-align:left; font:normal 12px Tahoma;\"><span ><b>" + msg1 + "</b><span style=\"color:black;\">" + msg2 + "</span></span></p>", 0, 0, null);
         } catch (BadLocationException | IOException ex) {
-             System.out.println(ex.toString());
+            System.out.println(ex.toString());
         }
         messContent.setCaretPosition(messContent.getDocument().getLength());
     }
@@ -133,7 +142,7 @@ public class Chat extends javax.swing.JFrame implements Runnable {
     public void appendMessage_Right(String msg1, String msg2) {     //dành cho người user này
         try {
             //htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:blue; margin-left:30px; text-align:right; font:normal 12px Tahoma;\"><b>" + msg1 + "</b><span style=\"color:black;\">" + msg2 + "</span></p>", 0, 0, null);
-            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:white; padding: 3px; margin-top: 4px; margin-left:35px; text-align:right; font:normal 12px Tahoma;\"><span style=\"background-color: #889eff; -webkit-border-radius: 10px;\">" + msg2 + "</span></p>", 0, 0, null);
+            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:red; padding: 3px; margin-top: 4px; margin-left:35px; text-align:right; font:normal 12px Tahoma;\"><span>" + msg2 + "</span></p>", 0, 0, null);
         } catch (BadLocationException | IOException ex) {
             System.out.println(ex.toString());
         }
@@ -142,16 +151,15 @@ public class Chat extends javax.swing.JFrame implements Runnable {
 
     public void appendMessage_Right(String msg1) {     //dành cho người user này
         try {
-            //htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:blue; margin-left:30px; text-align:right; font:normal 12px Tahoma;\"><b>" + msg1 + "</b><span style=\"color:black;\">" + msg2 + "</span></p>", 0, 0, null);
-            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:white; padding: 3px; margin-top: 4px; margin-left:35px; text-align:right; font:normal 12px Tahoma;\"><span style=\"background-color: #889eff; -webkit-border-radius: 10px;\">" + msg1 + "</span></p>", 0, 0, null);
+             htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:red; padding: 3px; margin-top: 4px; margin-left:35px; text-align:right; font:normal 12px Tahoma;\"><span >" + msg1 + "</span></p>", 0, 0, null);
         } catch (BadLocationException | IOException ex) {
-             System.out.println(ex.toString());
+            System.out.println(ex.toString());
         }
         messContent.setCaretPosition(messContent.getDocument().getLength());
     }
 
     private void openSendFileFrame() {
-        sendFileFrame = new SendFileFrame(receiver, name, destinationIP, destinationPort, socket);
+        sendFileFrame = new SendFileFrame(receiver, name, destinationIP, destinationPort, socket, messContent,htmlKit,htmlDoc);
         sendFileFrame.getTfReceiver().setText(receiver);
         sendFileFrame.setVisible(true);
         sendFileFrame.setLocation(450, 250);
@@ -159,12 +167,18 @@ public class Chat extends javax.swing.JFrame implements Runnable {
     }
 
     public void exit() {
-        System.out.println("Peer" + name + " is Closed.");
-        running = false;
-        socket.close();
+        try {
+            System.out.println("Peer " + name + " is Closed.");
+            running = false;
+            socket.close();
+        } catch (Exception e) {
+
+        }
     }
 
-    private void downloadFile(String buttonName,FileInfo fileInfo) throws FileNotFoundException, IOException {
+   
+
+    private void downloadFile(String buttonName, FileInfo fileInfo) throws FileNotFoundException, IOException {
         String myDownloadFolder;
         JFileChooser chooser = new JFileChooser();
         chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -177,44 +191,43 @@ public class Chat extends javax.swing.JFrame implements Runnable {
         }
         System.out.println("start receiving file");
         byte[] receiveData = new byte[PIECES_OF_FILE_SIZE];
-        System.out.println("des dir "+myDownloadFolder);
-         if (fileInfo != null) {
-                    System.out.println("File name: " + fileInfo.getFilename());
-                    System.out.println("File size: " + fileInfo.getFileSize());
-                    System.out.println("Pieces of file: " + fileInfo.getPiecesOfFile());
-                    System.out.println("Last bytes length: " + fileInfo.getLastByteLength());
-                }
-        File fileReceive = new File(myDownloadFolder+"\\"+ fileInfo.getFilename());
-                BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(fileReceive));
-                // write pieces of file
-                for (int i = 0; i < (fileInfo.getPiecesOfFile() - 1); i++) {
-                    bos.write(receiveData, 0, PIECES_OF_FILE_SIZE);
-                }
-                // write last bytes of file
-                bos.write(receiveData, 0, fileInfo.getLastByteLength());
-                bos.flush();
-                
-                System.out.println("Done download!");
-                 JOptionPane.showMessageDialog(this, "Download OK", "Notice", JOptionPane.INFORMATION_MESSAGE);
-       
-                // close stream
-                bos.close();
-        
+        System.out.println("des dir " + myDownloadFolder);
+        if (fileInfo != null) {
+            System.out.println("File name: " + fileInfo.getFilename());
+            System.out.println("File size: " + fileInfo.getFileSize());
+            System.out.println("Pieces of file: " + fileInfo.getPiecesOfFile());
+            System.out.println("Last bytes length: " + fileInfo.getLastByteLength());
+        }
+        File fileReceive = new File(myDownloadFolder + "\\" + fileInfo.getFilename());
+        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(fileReceive));
+        // write pieces of file
+        for (int i = 0; i < (fileInfo.getPiecesOfFile() - 1); i++) {
+            bos.write(receiveData, 0, PIECES_OF_FILE_SIZE);
+        }
+        // write last bytes of file
+        bos.write(receiveData, 0, fileInfo.getLastByteLength());
+        bos.flush();
+
+        System.out.println("Done download!");
+        JOptionPane.showMessageDialog(this, "Download OK", "Notice", JOptionPane.INFORMATION_MESSAGE);
+
+        // close stream
+        bos.close();
+
     }
-    
-    public void receiveMessage(String sender, String file) throws IOException {
+
+    public void receiveMessage(String sender) throws IOException {
         byte[] receiveData = new byte[PIECES_OF_FILE_SIZE];
         DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
         socket.receive(receivePacket);
         String msg = new String(receiveData, 0, receivePacket.getLength());
         this.dataReceive = msg;
-        
+
         if (msg.contains("CHAT_MSG|")) { // receive string
             String tem = msg.substring(msg.indexOf("CHAT_MSG|") + 9);
             appendMessage_Left(name + " : ", tem);
             System.out.println("in run nhận dc text" + tem);
-        } 
-        else // receive file
+        } else // receive file
         {
             try {
                 InetAddress inetAddress = receivePacket.getAddress();
@@ -235,7 +248,7 @@ public class Chat extends javax.swing.JFrame implements Runnable {
                     receivePacket = new DatagramPacket(receiveData, receiveData.length,
                             inetAddress, sourcePort);
                     socket.receive(receivePacket);
-                   
+
                 }
                 // write last bytes of file
                 receivePacket = new DatagramPacket(receiveData, receiveData.length,
@@ -244,7 +257,7 @@ public class Chat extends javax.swing.JFrame implements Runnable {
                 System.out.println("Send file Done!");
                 insertButton(sender, this.fileInfo.getFilename());
                 // close stream
-               
+
             } catch (IOException e) {
                 e.printStackTrace();
             } catch (ClassNotFoundException e) {
@@ -253,7 +266,6 @@ public class Chat extends javax.swing.JFrame implements Runnable {
         }
     }
 
-    
     public void sendTo(InetSocketAddress address, String msg) throws IOException {
         byte[] buffer = msg.getBytes();
         DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
@@ -261,8 +273,15 @@ public class Chat extends javax.swing.JFrame implements Runnable {
         socket.send(packet);
     }
 
-    public void bind(int port) throws SocketException {
-        socket = new DatagramSocket(port);
+    public boolean bind(int port) throws SocketException {
+        try {
+            
+            socket = new DatagramSocket(port);
+            return true;
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(null, "Chat P2P cùng lúc chỉ được 1 người thoi :(");
+            return false;
+        }
     }
 
     @Override
@@ -270,17 +289,12 @@ public class Chat extends javax.swing.JFrame implements Runnable {
         running = true;
         while (running) {
             try {
-                receiveMessage("YY", "xx");
+                receiveMessage(this.receiver);
             } catch (IOException ex) {
                 Logger.getLogger(Chat.class
                         .getName()).log(Level.SEVERE, null, ex);
             }
         }
-    }
-
-    public static void main(String[] args) throws IOException {
-         Chat x = new Chat("danh111", "danh123", 111, 112, "10.80.255.176");
-      // Chat y = new Chat("danh123", "danh111", 112, 111, "10.80.255.176");
     }
 
     @SuppressWarnings("unchecked")

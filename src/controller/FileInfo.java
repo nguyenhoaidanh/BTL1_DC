@@ -18,11 +18,7 @@ public class FileInfo implements Serializable {
     private int lastByteLength;
     private String status;
 
-   
-     
-    // Constructors
-     
-    // Getter and setter
+
 
     public String getDestinationDirectory() {
         return destinationDirectory;

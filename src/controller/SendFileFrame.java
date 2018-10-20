@@ -25,6 +25,10 @@ import java.util.logging.Logger;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
+import javax.swing.JTextPane;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.html.HTMLDocument;
+import javax.swing.text.html.HTMLEditorKit;
 
 public class SendFileFrame extends javax.swing.JFrame {
 
@@ -33,10 +37,13 @@ public class SendFileFrame extends javax.swing.JFrame {
     String destIP;
     int desPort;
     DatagramSocket socket; //socket of client not of receiver
+    JTextPane messContent; // mess content of owner
+    HTMLEditorKit htmlKit;
+    HTMLDocument htmlDoc;
     public String thePersonIamChattingWith;
     int PIECES_OF_FILE_SIZE = 1024 * 32;
 
-    public SendFileFrame(String receiver, String sender, String destIP, int desPort, DatagramSocket socket) {
+    public SendFileFrame(String receiver, String sender, String destIP, int desPort, DatagramSocket socket, JTextPane messContent,HTMLEditorKit htmlKit,HTMLDocument htmlDoc) {
         this.desPort = desPort;
         this.destIP = destIP;
         this.socket = socket;
@@ -44,9 +51,12 @@ public class SendFileFrame extends javax.swing.JFrame {
         this.thePersonIamChattingWith = receiver;
         this.sender = sender;
         this.setTitle(sender + " send file to " + thePersonIamChattingWith);
+        this.messContent = messContent;
+        this.htmlKit=htmlKit;
+        this.htmlDoc=htmlDoc;
     }
 
-    public void LoadFile(String sourcePath, String destIP, int desPort, DatagramSocket socket) throws IOException {
+    public void LoadFile(String sourcePath, String destIP, int desPort, DatagramSocket socket) throws IOException, BadLocationException {
         InetAddress inetAddress;
         DatagramPacket sendPacket;
         try {
@@ -80,7 +90,6 @@ public class SendFileFrame extends javax.swing.JFrame {
             fileInfo.setFileSize(fileSend.length());
             fileInfo.setPiecesOfFile(piecesOfFile);
             fileInfo.setLastByteLength(lastByteLength);
-            // fileInfo.setDestinationDirectory(destinationDir);
 
             // send file info
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -108,12 +117,21 @@ public class SendFileFrame extends javax.swing.JFrame {
 
             // close stream
             bis.close();
+
+            // tạo 1 message of owner thong bao la minh da gui file
+            
+            messContent.setEditorKit(htmlKit);
+            messContent.setDocument(htmlDoc);
+            String msg = "You just send a file: " + fileInfo.getFilename();
+            htmlKit.insertHTML(htmlDoc, htmlDoc.getLength(), "<p style=\"color:green; padding: 3px; margin-top: 4px; margin-left:35px; text-align:right; font:normal 10px Tahoma;\"><span style=\"background-color: lightblue; -webkit-border-radius: 10px;\">" + msg + "</span></p>", 0, 0, null);
+            messContent.setCaretPosition(messContent.getDocument().getLength());
+            System.out.println("Sent file done.");
         } catch (UnknownHostException e) {
             e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.println("Sent file done.");
+        
 
     }
 
@@ -222,11 +240,13 @@ public class SendFileFrame extends javax.swing.JFrame {
         this.thePersonIamChattingWith = tfReceiver.getText();
         this.filePath = tfFilePath.getText();
         System.out.println("file name " + filePath + " to " + thePersonIamChattingWith);
-        if (this.filePath.equals("")==false) {
+        if (this.filePath.equals("") == false) {
             this.setVisible(false);
             try {
                 LoadFile(this.filePath, destIP, desPort, socket);
             } catch (IOException ex) {
+                Logger.getLogger(SendFileFrame.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (BadLocationException ex) {
                 Logger.getLogger(SendFileFrame.class.getName()).log(Level.SEVERE, null, ex);
             }
         }

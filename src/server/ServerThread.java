@@ -1,26 +1,17 @@
-
 package server;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
-import java.util.Date;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JTextArea;
-
 
 public class ServerThread extends Thread {
 
@@ -29,7 +20,7 @@ public class ServerThread extends Thread {
     BufferedReader br;
     String clientName, clientPass;
     public static Hashtable<String, ServerThread> listUser = new Hashtable<>();
-  
+
     public static final String NICKNAME_EXIST = "This nickname is already login in another place! Please using another nickname";
     public static final String NICKNAME_VALID = "This nickname is OK";
     public static final String NICKNAME_INVALID = "Nickname or password is incorrect";
@@ -104,7 +95,7 @@ public class ServerThread extends Thread {
     }
 
     public void notifyToAllUsers(String message) {
-       
+
         Enumeration<ServerThread> clients = listUser.elements();
         ServerThread st;
         BufferedWriter writer;
@@ -135,22 +126,22 @@ public class ServerThread extends Thread {
 
     public String getAllUsers() {
         Enumeration<ServerThread> clients = listUser.elements();
-        String kq="";
-        ServerThread st; BufferedWriter writer;
+        String kq = "";
+        ServerThread st;
+        BufferedWriter writer;
         Enumeration<String> keys = listUser.keys();
-        String tem="";
-        while(clients.hasMoreElements()) {
+        String tem = "";
+        while (clients.hasMoreElements()) {
             st = clients.nextElement();
-             tem=keys.nextElement();
-            System.out.println(st.socketOfServer.getPort()+" "+st.socketOfServer.getLocalPort()+" "+st.socketOfServer.getInetAddress());
-           kq+="|"+tem+"-"+(st.socketOfServer.getPort());
+            tem = keys.nextElement();
+            kq += "|" + tem + "-" + (st.socketOfServer.getPort()); // name-port
         }
         System.out.println(kq);
-        return kq; 
+        return kq;
     }
-    
+
     public void clientQuit() {
-       
+
         if (clientName != "") {
 
             this.appendMessage("\n- Client \"" + clientName + "\" is disconnected!");
@@ -159,6 +150,27 @@ public class ServerThread extends Thread {
                 this.appendMessage("\n- No user is connecting to server...");
             }
             notifyToAllUsers("GET_USER_ONLINE|" + getAllUsers());
+
+        }
+    }
+
+    public void notifyToUsersInRoom(String message) {      //gửi bản tin message tới phòng room
+        Enumeration<ServerThread> clients = listUser.elements();
+        ServerThread st;
+        BufferedWriter writer;
+
+        while (clients.hasMoreElements()) {
+            st = clients.nextElement();
+
+            writer = st.bw;
+
+            try {
+                writer.write(message);
+                writer.newLine();
+                writer.flush();
+            } catch (IOException ex) {
+                Logger.getLogger(ServerFrame.class.getName()).log(Level.SEVERE, null, ex);
+            }
 
         }
     }
@@ -172,7 +184,7 @@ public class ServerThread extends Thread {
 
             boolean isUserExist = true;
             String message, sender, receiver, fileName;
-         
+            StringBuffer str;
             String cmd;
             while (true) {   //cứ chờ client gửi tin tới và phản hồi
                 try {
@@ -181,18 +193,11 @@ public class ServerThread extends Thread {
                     cmd = tokenizer.nextToken();
 
                     switch (cmd) {
-
-                        case "CHAT_MSG":
-                            String privateSender = tokenizer.nextToken();
-                            String privateReceiver = tokenizer.nextToken();
-                            String messageContent = message.substring(cmd.length() + privateSender.length() + privateReceiver.length() + 3, message.length());
-
-                            ServerThread st_receiver = listUser.get(privateReceiver);
-                            sendToSpecificClient(st_receiver, "CHAT_MSG|" + privateSender + "|" + messageContent);
-
-                            System.out.println("[ServerThread] message = " + messageContent);
+                        case "CHAT_ROOM_MSG":
+                            str = new StringBuffer(message);
+                            str = str.delete(0, 9);
+                            notifyToUsersInRoom("CHAT_ROOM_MSG|" + this.clientName + "|" + str.toString());    //this.clientName = tên client gửi tin tới
                             break;
-
                         case "LOGIN_REQ":
                             clientName = tokenizer.nextToken();
                             clientPass = tokenizer.nextToken();
@@ -235,57 +240,9 @@ public class ServerThread extends Thread {
                             notifyToAllUsers("GET_USER_ONLINE|" + getAllUsers());
                             break;
 
-                        case "FILE_REQ":    //the sender sends a file to server:
-                            sender = tokenizer.nextToken();
-                            receiver = tokenizer.nextToken();
-                            fileName = tokenizer.nextToken();
-                           
+                      
 
-                            String path = System.getProperty("user.dir") + "\\sendfile\\" + fileName;
-                            BufferedInputStream bis = new BufferedInputStream(socketOfServer.getInputStream());   //lấy luồng vào là từ sender
-                            FileOutputStream fos = new FileOutputStream(path);   //luồng ra là tới file sẽ lưu ở ổ cứng của server
-
-                            byte[] buffer = new byte[BUFFER_SIZE];
-                            int count = -1;
-                            while ((count = bis.read(buffer)) > 0) {  //is đọc được bao nhiêu từ sender sẽ lưu tạm vào mảng buffer
-                                fos.write(buffer, 0, count);         //và sau đó os lấy buffer gửi cho receiver
-                            }
-
-                            Thread.sleep(300);
-                            bis.close();
-                            fos.close();
-                            socketOfServer.close();
-
-                            ///thông báo cho sender và receiver rằng file vừa gửi lên rồi, sau đó họ muốn tải xuống thì là việc của họ:
-                            ServerThread stSender = listUser.get(sender);       //chú ý rằng stSender ko phải là socketOfServer ở trên nhé, 
-                            //vì socketOfServer là 1 socket kết nối với 1 socket tạm thời của sender. Cái socket tạm thời đó đc tạo ra khi sender muốn
-                            //gửi 1 file tới server, và sau khi gửi xong file, socket tạm thời đó biến mất 
-                            ServerThread stReceiver = listUser.get(receiver);
-
-                            sendToSpecificClient(stSender, "MSG_FILE_AVAILABLE|" + fileName + "|" + receiver + "|" + sender);
-                            sendToSpecificClient(stReceiver, "MSG_FILE_AVAILABLE|" + fileName + "|" + sender + "|" + sender);
-
-                            isBusy = false;
-                            break;
-
-                        case "DOWNLOAD_FILE_REQ":    //server sends file to someone who just pressed download file
-                            fileName = tokenizer.nextToken();
-                            path = System.getProperty("user.dir") + "\\sendfile\\" + fileName;
-                            FileInputStream fis = new FileInputStream(path);
-                            BufferedOutputStream bos = new BufferedOutputStream(socketOfServer.getOutputStream());
-
-                            byte[] buffer2 = new byte[BUFFER_SIZE];
-                            int count2 = 0;
-
-                            while ((count2 = fis.read(buffer2)) > 0) {
-                                bos.write(buffer2, 0, count2);    //liên tục gửi từng phần của file tới server
-                            }
-
-                            bos.close();
-                            fis.close();
-                            socketOfServer.close();
-
-                            break;
+                       
                         default:
                             notifyToAllUsers("GET_USER_ONLINE|" + getAllUsers());
 
